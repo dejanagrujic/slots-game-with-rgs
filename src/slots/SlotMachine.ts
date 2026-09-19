@@ -7,11 +7,12 @@ import {Spine} from "pixi-spine";
 import { RgsResponse } from '../rgs/types';
 import { RgsService } from '../rgs/RgsService';
 
-const REEL_COUNT = 4;
 const SYMBOLS_PER_REEL = 6;
 const SYMBOL_SIZE = 150;
 const REEL_HEIGHT = SYMBOL_SIZE;
 const REEL_SPACING = 10;
+const REEL_START_DELAY = 200;
+const DEFAULT_BET = 1;
 
 export class SlotMachine {
     public container: PIXI.Container;
@@ -24,6 +25,7 @@ export class SlotMachine {
     private initialState: RgsResponse;
     private rgsService: RgsService;
     private allReelsStarted: boolean = false;
+    private reelCount: number;
 
     constructor(app: PIXI.Application, initialState: RgsResponse, rgsService: RgsService) {
         this.app = app;
@@ -31,10 +33,11 @@ export class SlotMachine {
         this.reels = [];
         this.initialState = initialState;
         this.rgsService = rgsService;
+        this.reelCount = initialState.reels.length;
 
         // Center the slot machine
         this.container.x = this.app.screen.width / 2 - ((SYMBOL_SIZE * SYMBOLS_PER_REEL) / 2);
-        this.container.y = this.app.screen.height / 2 - ((REEL_HEIGHT * REEL_COUNT + REEL_SPACING * (REEL_COUNT - 1)) / 2);
+        this.container.y = this.app.screen.height / 2 - ((REEL_HEIGHT * this.reelCount + REEL_SPACING * (this.reelCount - 1)) / 2);
 
         this.createBackground();
 
@@ -51,7 +54,7 @@ export class SlotMachine {
                 -20,
                 -20,
                 SYMBOL_SIZE * SYMBOLS_PER_REEL + 40, // Width now based on symbols per reel
-                REEL_HEIGHT * REEL_COUNT + REEL_SPACING * (REEL_COUNT - 1) + 40 // Height based on reel count
+                REEL_HEIGHT * this.reelCount + REEL_SPACING * (this.reelCount - 1) + 40 // Height based on reel count
             );
             background.endFill();
             this.container.addChild(background);
@@ -62,7 +65,7 @@ export class SlotMachine {
 
     private createReels(): void {
         // Create each reel
-        for (let i = 0; i < REEL_COUNT; i++) {
+        for (let i = 0; i < this.reelCount; i++) {
             const reelStrip = this.initialState.reels[i];
             const stopPosition = this.initialState.stopPositions[i];
 
@@ -103,7 +106,7 @@ export class SlotMachine {
         this.isSpinning = true;
         this.allReelsStarted = false;
 
-        const spinResult = this.rgsService.spin({ bet: 1 });
+        const spinResult = this.rgsService.spin({ bet: DEFAULT_BET });
 
         for (let i = 0; i < this.reels.length; i++) {
             this.reels[i].setResult(
@@ -127,7 +130,7 @@ export class SlotMachine {
                 if (i === this.reels.length - 1) {
                     this.allReelsStarted = true;
                 }
-            }, i * 200);
+            }, i * REEL_START_DELAY);
         }
     }
 
@@ -166,7 +169,7 @@ export class SlotMachine {
             if (frameSpineData) {
                 this.frameSpine = new Spine(frameSpineData.spineData);
 
-                this.frameSpine.y = (REEL_HEIGHT * REEL_COUNT + REEL_SPACING * (REEL_COUNT - 1)) / 2;
+                this.frameSpine.y = (REEL_HEIGHT * this.reelCount + REEL_SPACING * (this.reelCount - 1)) / 2;
                 this.frameSpine.x = (SYMBOL_SIZE * SYMBOLS_PER_REEL) / 2;
 
                 if (this.frameSpine.state.hasAnimation('idle')) {
@@ -180,7 +183,7 @@ export class SlotMachine {
             if (winSpineData) {
                 this.winAnimation = new Spine(winSpineData.spineData);
 
-                this.winAnimation.x = (REEL_HEIGHT * REEL_COUNT + REEL_SPACING * (REEL_COUNT - 1)) / 2;
+                this.winAnimation.x = (REEL_HEIGHT * this.reelCount + REEL_SPACING * (this.reelCount - 1)) / 2;
                 this.winAnimation.y = (SYMBOL_SIZE * SYMBOLS_PER_REEL) / 2;
 
                 this.winAnimation.visible = false;

@@ -1,5 +1,5 @@
 import { Howl } from 'howler';
-// TODO: Implement sound player using the "howler" package
+// Implement sound player using the "howler" package
 const sounds: Record<string, Howl> = {};
 export const sound = {
     add: (alias: string, url: string): void => {

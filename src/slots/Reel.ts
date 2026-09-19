@@ -83,7 +83,7 @@ export class Reel {
             1
         );
 
-        // TODO:Move symbols horizontally
+        //Move symbols horizontally
         const easedProgress = this.easeOut(progress);
         const totalDistance = this.symbolsToStop * this.symbolSize;
         const targetDistance = totalDistance * easedProgress;
@@ -108,7 +108,7 @@ export class Reel {
     }
 
     private snapToGrid(): void {
-        // TODO: Snap symbols to horizontal grid positions  
+        // Snap symbols to horizontal grid positions  
         this.symbols.sort((a, b) => a.x - b.x);
 
         this.symbols.forEach((symbol, index) => {

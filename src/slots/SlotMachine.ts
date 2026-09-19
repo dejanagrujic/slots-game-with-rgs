@@ -87,6 +87,7 @@ export class SlotMachine {
                 this.isSpinning = false;
 
                 sound.stop('Reel spin');
+                this.checkWin();
 
                 if (this.spinButton) {
                     this.spinButton.texture = AssetLoader.getTexture('button_spin.png');
@@ -139,7 +140,18 @@ export class SlotMachine {
             console.log('Winner!');
 
             if (this.winAnimation) {
-                // TODO: Play the win animation found in "big-boom-h" spine
+                //Play the win animation found in "big-boom-h" spine
+                this.winAnimation.visible = true;
+                this.winAnimation.state.setAnimation(0, 'start', false);
+
+                this.winAnimation.state.addListener({
+                    complete: () => {
+                        if (this.winAnimation) {
+                            this.winAnimation.visible = false;
+                            this.winAnimation.state.clearListeners();
+                        }
+                    }
+                });
             }
         }
     }

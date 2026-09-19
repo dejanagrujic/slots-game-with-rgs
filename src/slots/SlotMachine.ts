@@ -4,6 +4,8 @@ import { Reel } from './Reel';
 import { sound } from '../utils/sound';
 import { AssetLoader } from '../utils/AssetLoader';
 import {Spine} from "pixi-spine";
+import { RgsResponse } from '../rgs/types';
+import { RgsService } from '../rgs/RgsService';
 
 const REEL_COUNT = 4;
 const SYMBOLS_PER_REEL = 6;
@@ -19,11 +21,16 @@ export class SlotMachine {
     private spinButton: PIXI.Sprite | null = null;
     private frameSpine: Spine | null = null;
     private winAnimation: Spine | null = null;
+    private initialState: RgsResponse;
+    private rgsService: RgsService;
+    private allReelsStarted: boolean = false;
 
-    constructor(app: PIXI.Application) {
+    constructor(app: PIXI.Application, initialState: RgsResponse, rgsService: RgsService) {
         this.app = app;
         this.container = new PIXI.Container();
         this.reels = [];
+        this.initialState = initialState;
+        this.rgsService = rgsService;
 
         // Center the slot machine
         this.container.x = this.app.screen.width / 2 - ((SYMBOL_SIZE * SYMBOLS_PER_REEL) / 2);
@@ -56,7 +63,10 @@ export class SlotMachine {
     private createReels(): void {
         // Create each reel
         for (let i = 0; i < REEL_COUNT; i++) {
-            const reel = new Reel(SYMBOLS_PER_REEL, SYMBOL_SIZE);
+            const reelStrip = this.initialState.reels[i];
+            const stopPosition = this.initialState.stopPositions[i];
+
+            const reel = new Reel(SYMBOLS_PER_REEL, SYMBOL_SIZE, reelStrip, stopPosition);
             reel.container.y = i * (REEL_HEIGHT + REEL_SPACING);
             this.container.addChild(reel.container);
             this.reels.push(reel);
@@ -68,18 +78,42 @@ export class SlotMachine {
         for (const reel of this.reels) {
             reel.update(delta);
         }
+
+        if (this.isSpinning && this.allReelsStarted) {
+            const allReelsStopped = this.reels.every(
+                reel => !reel.getIsSpinning()
+            );
+            if (allReelsStopped) {
+                this.isSpinning = false;
+
+                if (this.spinButton) {
+                    this.spinButton.texture = AssetLoader.getTexture('button_spin.png');
+                    this.spinButton.interactive = true;
+                }
+            }
+        }
     }
 
     public spin(): void {
         if (this.isSpinning) return;
 
         this.isSpinning = true;
+        this.allReelsStarted = false;
+
+        const spinResult = this.rgsService.spin({ bet: 1 });
+
+        for (let i = 0; i < this.reels.length; i++) {
+            this.reels[i].setResult(
+            spinResult.reels[i],
+            spinResult.stopPositions[i]);
+        }
 
         // Play spin sound
         sound.play('Reel spin');
 
         // Disable spin button
         if (this.spinButton) {
+
             this.spinButton.texture = AssetLoader.getTexture('button_spin_disabled.png');
             this.spinButton.interactive = false;
         }
@@ -87,34 +121,10 @@ export class SlotMachine {
         for (let i = 0; i < this.reels.length; i++) {
             setTimeout(() => {
                 this.reels[i].startSpin();
-            }, i * 200);
-        }
-
-        // Stop all reels after a delay
-        setTimeout(() => {
-            this.stopSpin();
-        }, 500 + (this.reels.length - 1) * 200);
-
-    }
-
-    private stopSpin(): void {
-        for (let i = 0; i < this.reels.length; i++) {
-            setTimeout(() => {
-                this.reels[i].stopSpin();
-
-                // If this is the last reel, check for wins and enable spin button
                 if (i === this.reels.length - 1) {
-                    setTimeout(() => {
-                        this.checkWin();
-                        this.isSpinning = false;
-
-                        if (this.spinButton) {
-                            this.spinButton.texture = AssetLoader.getTexture('button_spin.png');
-                            this.spinButton.interactive = true;
-                        }
-                    }, 500);
+                    this.allReelsStarted = true;
                 }
-            }, i * 400);
+            }, i * 200);
         }
     }
 

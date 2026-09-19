@@ -2,12 +2,14 @@ import * as PIXI from 'pixi.js';
 import { SlotMachine } from './slots/SlotMachine';
 import { AssetLoader } from './utils/AssetLoader';
 import { UI } from './ui/UI';
+import { RgsService } from './rgs/RgsService';
 
 export class Game {
     private app: PIXI.Application;
     private slotMachine!: SlotMachine;
     private ui!: UI;
     private assetLoader: AssetLoader;
+    private rgsService: RgsService;
 
     constructor() {
         this.app = new PIXI.Application({
@@ -24,6 +26,7 @@ export class Game {
         }
 
         this.assetLoader = new AssetLoader();
+        this.rgsService = new RgsService();
 
         this.init = this.init.bind(this);
         this.resize = this.resize.bind(this);
@@ -37,7 +40,9 @@ export class Game {
         try {
             await this.assetLoader.loadAssets();
 
-            this.slotMachine = new SlotMachine(this.app);
+            const initialState = this.rgsService.init();
+
+            this.slotMachine = new SlotMachine(this.app, initialState, this.rgsService);
             this.app.stage.addChild(this.slotMachine.container);
 
             this.ui = new UI(this.app, this.slotMachine);

@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { AssetLoader } from '../utils/AssetLoader';
+import { ReelStrip } from '../rgs/types';
 
 const SYMBOL_TEXTURES = [
     'symbol1.png',
@@ -9,25 +10,32 @@ const SYMBOL_TEXTURES = [
     'symbol5.png',
 ];
 
-const SPIN_SPEED = 50; // Pixels per frame
-const SLOWDOWN_RATE = 0.95; // Rate at which the reel slows down
-const MIN_STOP_SPEED = 5;
+const MIN_FULL_SPINS = 2;
+const SPIN_DURATION = 120;
 
 export class Reel {
     public container: PIXI.Container;
     private symbols: PIXI.Sprite[];
     private symbolSize: number;
     private symbolCount: number;
-    private speed: number = 0;
     private isSpinning: boolean = false;
     private spinOffset: number = 0;
-    private isAligning: boolean = false;
+    private reelStrip: ReelStrip;
+    private stopPosition: number;
+    private currentPosition: number;
+    private symbolsPassed: number = 0;
+    private symbolsToStop: number = 0;
+    private spinElapsed: number = 0;
+    private spinDistance: number = 0;
 
-    constructor(symbolCount: number, symbolSize: number) {
+    constructor(symbolCount: number, symbolSize: number, reelStrip: ReelStrip, stopPosition: number) {
         this.container = new PIXI.Container();
         this.symbols = [];
         this.symbolSize = symbolSize;
         this.symbolCount = symbolCount;
+        this.reelStrip = reelStrip;
+        this.stopPosition = stopPosition;
+        this.currentPosition = stopPosition;
 
         this.createSymbols();
 
@@ -44,7 +52,8 @@ export class Reel {
     private createSymbols(): void {
         // Create symbols for the reel, arranged horizontally
         for (let i = -1; i < this.symbolCount; i++) {
-            const symbol = this.createRandomSymbol();
+            const symbolIndex = (this.stopPosition + i + this.reelStrip.length) % this.reelStrip.length;
+            const symbol = this.createSymbol(this.reelStrip[symbolIndex]);
 
             symbol.x = i * this.symbolSize;
             symbol.y = 0;
@@ -57,27 +66,30 @@ export class Reel {
         }
     }
 
-    private createRandomSymbol(): PIXI.Sprite {
-        // TODO:Get a random symbol texture
-        const randomIndex = Math.floor(Math.random() * SYMBOL_TEXTURES.length);
-        const textureName = SYMBOL_TEXTURES[randomIndex];
-
-        // TODO:Create a sprite with the texture
+    private createSymbol(symbolId: number): PIXI.Sprite {
+        const textureName = SYMBOL_TEXTURES[symbolId - 1];
         const texture = AssetLoader.getTexture(textureName);
-        const sprite = new PIXI.Sprite(texture);
 
-        return sprite;
+        return new PIXI.Sprite(texture);
     }
-
+    
     public update(delta: number): void {
-        if (!this.isSpinning && this.speed === 0) return;
+        if (!this.isSpinning) return;
+
+        this.spinElapsed += delta;
+
+        const progress = Math.min(
+            this.spinElapsed / SPIN_DURATION,
+            1
+        );
 
         // TODO:Move symbols horizontally
-        let movement = this.speed * delta;
-        if (this.isAligning) {
-            const distanceToGrid = this.symbolSize - this.spinOffset;
-            movement = Math.min(movement, distanceToGrid);
-        }
+        const easedProgress = this.easeOut(progress);
+        const totalDistance = this.symbolsToStop * this.symbolSize;
+        const targetDistance = totalDistance * easedProgress;
+
+        const movement = targetDistance - this.spinDistance;
+        this.spinDistance = targetDistance;
 
         for (const symbol of this.symbols) {
             symbol.x += movement;
@@ -89,24 +101,8 @@ export class Reel {
             this.spinOffset -= this.symbolSize;
             this.rotateSymbols();
 
-            if (this.isAligning) {
-                this.speed = 0;
-                this.isAligning = false;
-
-                this.snapToGrid();
-
+            if (!this.isSpinning) {
                 break;
-            }
-        }
-
-        // If we're stopping, slow down the reel
-        if (!this.isSpinning && !this.isAligning && this.speed > 0) {
-            this.speed *= SLOWDOWN_RATE;
-
-            // If speed is very low, stop completely and snap to grid
-            if (this.speed < MIN_STOP_SPEED) {
-                this.speed = MIN_STOP_SPEED;
-                this.isAligning = true;
             }
         }
     }
@@ -122,14 +118,20 @@ export class Reel {
         this.spinOffset = 0;
     }
 
-    public startSpin(): void {
-        this.isSpinning = true;
-        this.speed = SPIN_SPEED;
+    public setResult(reelStrip: ReelStrip, stopPosition: number): void {
+        this.reelStrip = reelStrip;
+        this.stopPosition = stopPosition;
     }
 
-    public stopSpin(): void {
-        this.isSpinning = false;
-        // The reel will gradually slow down in the update method
+    public startSpin(): void {
+        this.isSpinning = true;
+        this.symbolsPassed = 0;
+        this.spinElapsed = 0;
+        this.spinDistance = 0;
+
+        const distanceToStop = (this.currentPosition - this.stopPosition + this.reelStrip.length) % this.reelStrip.length;
+
+        this.symbolsToStop = MIN_FULL_SPINS * this.reelStrip.length + distanceToStop;
     }
 
     private rotateSymbols(): void {
@@ -140,5 +142,25 @@ export class Reel {
         this.symbols.unshift(lastSymbol);
 
         lastSymbol.x = this.symbols[1].x - this.symbolSize;
+
+        this.currentPosition = (this.currentPosition - 1 + this.reelStrip.length) % this.reelStrip.length;
+        
+        this.symbolsPassed++;
+        
+        const symbolId = this.reelStrip[this.currentPosition];
+        lastSymbol.texture = AssetLoader.getTexture(SYMBOL_TEXTURES[symbolId - 1]);
+
+        if (this.symbolsPassed >= this.symbolsToStop) {
+            this.isSpinning = false;
+            this.snapToGrid();
+        }
+    }
+
+    public getIsSpinning(): boolean {
+        return this.isSpinning;
+    }
+
+    private easeOut(progress: number): number {
+        return 1 - Math.pow(1 - progress, 3);
     }
 }
